@@ -1,0 +1,7 @@
+.cproject
+.project
+/launchd
+.settings/
+/notifyd
+/notifyd-mkuser
+/libnotify.so
