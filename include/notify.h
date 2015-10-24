@@ -10,6 +10,21 @@ struct notify_state_s {
 typedef struct notify_state_s * notify_state_t;
 
 /** 
+  Initialize the state notification mechanism.
+
+  @return 0 if successful, or -1 if an error occurs.
+*/
+int state_init();
+
+/**
+  Subscribe to notifications about a *name*.
+
+  @param name	The name of interest
+  @return 0 if successful, or -1 if an error occurs.
+*/
+int state_subscribe(const char *name);
+
+/**
   Post a notification about *name* and update the *state*.
 
   @param name	The name to generate a notification for
@@ -18,7 +33,7 @@ typedef struct notify_state_s * notify_state_t;
 
   @return 0 if successful, or -1 if an error occurs.
 */
-int notify_post(const char *name, void *state, size_t len);
+int notify_post(const char *name, const char *state, size_t len);
 
 /** 
   Check for pending notifications, and return the current state.
@@ -30,7 +45,7 @@ int notify_post(const char *name, void *state, size_t len);
 	  0 if no notifications are available,
 	  or -1 if an error occurs.
 */
-ssize_t notify_check(notify_state_t *changes, size_t nchanges);
+ssize_t state_check(notify_state_t changes, size_t nchanges);
 
 /**
   Get a file descriptor that can be monitored for readability.
@@ -58,7 +73,7 @@ ssize_t notify_check(notify_state_t *changes, size_t nchanges);
 	
   @return a file descriptor, or -1 if an error occurred.
 */
-int notify_get_fd(void);
+int state_get_fd(void);
 
 /**
   Submit a block to be executed when one or more notifications are pending.

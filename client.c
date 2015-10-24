@@ -14,11 +14,28 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <fcntl.h>
 #include <string.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/event.h>
+#include <unistd.h>
 
+#include <sys/queue.h>
 
 #include "include/notify.h"
+
+/* Maximum number of notifications that can be subscribed to */
+#define MAX_SUBSCRIPTIONS 512
+
+static struct {
+	int kqfd;
+	int subfd[MAX_SUBSCRIPTIONS];
+	struct notify_state_s curstate[MAX_SUBSCRIPTIONS];
+	size_t nsubfd;
+} libstate_data;
 
 static char *name_to_path(const char *name)
 {
@@ -29,18 +46,95 @@ static char *name_to_path(const char *name)
 	//.usernotifydir = "/var/run/notifyd/user",
 
 	if (strncmp(name, user_prefix, strlen(user_prefix)) == 0) {
-		puts("user");
+		if (asprintf(&path, "/var/run/notifyd/user/%s", name + 5) < 0)
+			return (NULL);
+		for (int i = 0; path[i]; i++) {
+			if (path[i] == '.') {
+				path[i] = '/';
+				break;
+			}
+		}
+	} else {
+		abort();//STUB
 	}
 	return path;
 }
 
-int notify_post(const char *name, void *state, size_t len)
+int state_init() {
+	static bool initialized = false;
+
+	/* FIXME: not threadsafe */
+	if (initialized)
+		return -1;
+	libstate_data.nsubfd = 0;
+	memset(&libstate_data.subfd, -1, sizeof(libstate_data.subfd));
+	if ((libstate_data.kqfd = kqueue()) < 0)
+		return -1;
+	initialized = true;
+	return 0;
+}
+
+int notify_post(const char *name, const char *state, size_t len)
 {
-	char *path;
+	char *path = NULL;
+	int fd = -1;
 
 	if ((path = name_to_path(name)) == NULL)
-		return -1;
+		goto err_out;
+	if ((fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, 0644)) < 0)
+		goto err_out;
+	if (write(fd, state, len) < len)
+		goto err_out;
+	if (close(fd) < 0)
+		goto err_out;
+	printf("updated state of %s\n", path);
+	free(path);
+	return 0;
 
+err_out:
+	if (fd >= 0) close(fd);
+	free(path);
+	return -1;
+}
+
+int state_subscribe(const char *name)
+{
+	struct kevent kev;
+	char *path = NULL;
+	int fd = -1;
+
+	if (libstate_data.nsubfd == MAX_SUBSCRIPTIONS)
+		goto err_out;
+	if ((path = name_to_path(name)) == NULL)
+		goto err_out;
+
+	/** XXX-FIXME will not work if the publisher has not opened the file yet */
+	printf("watching %s\n", path);
+	fd = open(path, O_RDONLY);
+	if (fd < 0)
+		goto err_out;
+
+	for (int i = 0; i <= MAX_SUBSCRIPTIONS; i++) {
+		if (libstate_data.subfd[i] == -1) {
+			libstate_data.subfd[i] = fd;
+			libstate_data.nsubfd++;
+
+			libstate_data.curstate[i].ns_name = path;
+			libstate_data.curstate[i].ns_state = NULL;
+			libstate_data.curstate[i].ns_len = 0;
+			break;
+		}
+	}
+
+	EV_SET(&kev, fd, EVFILT_VNODE, EV_ADD, NOTE_ATTRIB | NOTE_WRITE, 0, 0);
+	if (kevent(libstate_data.kqfd, &kev, 1, NULL, 0, NULL) < 0)
+		goto err_out;
+
+	return 0;
+
+err_out:
+	if (fd >= 0) close(fd);
+	free(path);
 	return -1;
 }
 
@@ -54,8 +148,29 @@ int notify_post(const char *name, void *state, size_t len)
 	  0 if no notifications are available,
 	  or -1 if an error occurs.
 */
-ssize_t notify_check(notify_state_t *changes, size_t nchanges)
-{
+ssize_t state_check(notify_state_t changes, size_t nchanges) {
+	const struct timespec ts = { 0, 0 };
+	struct kevent kev; //FIXME: make this a bigger buffer
+	int nret;
+
+	nret = kevent(libstate_data.kqfd, NULL, 0, &kev, 1, &ts);
+	if (nret < 0)
+		return -1;
+	if (nret == 0)
+		return 0;
+	if (kev.fflags & NOTE_ATTRIB) {
+		printf("fd %u written", (unsigned int) kev.ident);
+	} else {
+		return -1;
+	}
+	for (int i = 0; i <= MAX_SUBSCRIPTIONS; i++) {
+		if (libstate_data.subfd[i] == kev.ident) {
+			printf("got name=%s\n", libstate_data.curstate[i].ns_name);
+			memcpy(changes, &libstate_data.curstate[i], sizeof(struct notify_state_s));
+			puts("TODO - read the current state");
+			return 1;
+		}
+	}
 	return -1;
 }
 
@@ -85,9 +200,9 @@ ssize_t notify_check(notify_state_t *changes, size_t nchanges)
 	
   @return a file descriptor, or -1 if an error occurred.
 */
-int notify_get_fd(void)
+int state_get_fd(void)
 {
-	return -1;
+	return libstate_data.kqfd;
 }
 
 /**

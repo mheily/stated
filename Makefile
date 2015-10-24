@@ -20,7 +20,7 @@ SBINDIR:=$(PREFIX)/sbin
 LIBEXECDIR:=$(PREFIX)/libexec
 DEBUGFLAGS=-g -O0 -DDEBUG
 
-all: notifyd notifyd-mkuser libnotify.so
+all: notifyd notifyd-mkuser libstate.so
 
 notifyd:
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ main.c log.c
@@ -28,8 +28,8 @@ notifyd:
 notifyd-mkuser:
 	$(CC) -static $(CFLAGS) $(LDFLAGS) -o $@ notifyd-mkuser.c
 
-libnotify.so:
-	$(CC) -fPIC -shared $(CFLAGS) $(LDFLAGS) -o $@ client.c
+libstate.so:
+	$(CC) -fPIC -shared $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $@ client.c
 	
 notifyd-debug:
 	CFLAGS="$(DEBUGFLAGS)" $(MAKE) launchd
@@ -45,4 +45,4 @@ install:
 	install -m 755 -o 0 -g 0 rc.FreeBSD /usr/local/etc/rc.d/notifyd
 	install -d -m 755 -o 0 -g 0 /var/run/notifyd /var/run/notifyd/system /var/run/notifyd/user
 
-.PHONY: all clean notifyd notifyd-mkuser libnotify.so
+.PHONY: all clean notifyd notifyd-mkuser libstate.so
