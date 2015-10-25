@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "../include/notify.h"
+#include "../include/state.h"
 #define run_test(_func) do { \
 	puts("running: "#_func); \
 	if (!test_##_func()) { puts("failed"); } else { puts("passed"); } \
@@ -40,11 +40,11 @@ int test_state_bind()
 	return (state_bind(name, 0644) == 0);
 }
 
-int test_notify_post()
+int test_state_publish()
 {
 	const char *name = "user.1001.end.of.the.world.as.we.know.it";
 	const char *state = "I feel fine";
-	return (notify_post(name, state, strlen(state)) == 0);
+	return (state_publish(name, state, strlen(state)) == 0);
 }
 
 int test_state_subscribe()
@@ -65,11 +65,10 @@ int test_state_check()
 int main(int argc, char *argv[]) {
 	run_test(state_init);
 	run_test(state_get_fd);
-	//TODO: test subscribe() before publish()
 	run_test(state_bind);
-	run_test(notify_post); // KLUDGE: ensures that the name fd exists
+	run_test(state_publish); // KLUDGE: ensures that the name fd exists, we should test subscribe() before publish()
 	run_test(state_subscribe);
-	run_test(notify_post);
+	run_test(state_publish);
 	run_test(state_check);
 	puts("ok");
 	exit(0);

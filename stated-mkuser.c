@@ -21,11 +21,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "include/state.h"
+
 int main(int argc, char *argv[]) {
 	char *path;
 	uid_t uid;
 	uid = getuid();
-	if (asprintf(&path, "/var/run/notifyd/user/%u", getuid()) < 0)
+	/* TODO: It would be nice to mount a separate tmpfs for each user,
+	 *   so one user cannot fill up the notification space of another user.
+	 */
+	if (asprintf(&path, "%s/user/%u", STATE_PREFIX, getuid()) < 0)
 		exit(EX_OSERR);
 	if (mkdir(path, 0755) < 0)
 		exit(EX_OSERR);

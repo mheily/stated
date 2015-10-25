@@ -1,7 +1,25 @@
-#ifndef NOTIFY_H_
-#define NOTIFY_H_
+/*
+ * Copyright (c) 2015 Mark Heily <mark@heily.com>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#ifndef _STATE_H_
+#define _STATE_H_
 
 #include <sys/stat.h>
+
+#define STATE_PREFIX "/var/state"
 
 /** A notification about a state change. */
 struct notify_state_s {
@@ -37,7 +55,7 @@ int state_bind(const char *name, mode_t mode);
 int state_subscribe(const char *name);
 
 /**
-  Post a notification about *name* and update the *state*.
+  Publish a notification about *name* and update the *state*.
 
   @param name	The name to generate a notification for
   @param state	The new state to report
@@ -45,7 +63,7 @@ int state_subscribe(const char *name);
 
   @return 0 if successful, or -1 if an error occurs.
 */
-int notify_post(const char *name, const char *state, size_t len);
+int state_publish(const char *name, const char *state, size_t len);
 
 /** 
   Check for pending notifications, and return the current state.
@@ -88,7 +106,7 @@ ssize_t state_check(notify_state_t changes, size_t nchanges);
 int state_get_fd(void);
 
 /**
-  Submit a block to be executed when one or more notifications are pending.
+  Submit a block to be executed when one or more state change notifications are pending.
 
   This is basically a convenience function that implements the example code
   shown in the documentation for notify_get_fd(). 
@@ -101,16 +119,16 @@ int state_get_fd(void);
   @param block the block of code to be executed
 */
 #if defined(__block) && defined(dispatch_queue_t)
-void notify_dispatch(char *name, dispatch_queue_t queue, void (^block)(void));
+void state_dispatch(char *name, dispatch_queue_t queue, void (^block)(void));
 #endif
 
 /**
   Execute a callback function when one or more notifications are pending.
 
-  This is equivalent to notify_dispatch(), but without using blocks.
+  This is equivalent to state_dispatch(), but without using blocks.
 */
 #ifdef dispatch_queue_t
-void notify_dispatch_f(char *name, dispatch_queue_t queue, void *context, void (*func)(void *));
+void state_dispatch_f(char *name, dispatch_queue_t queue, void *context, void (*func)(void *));
 #endif
 
 /**
@@ -118,13 +136,13 @@ void notify_dispatch_f(char *name, dispatch_queue_t queue, void *context, void (
 
   @return 0 if successful, or -1 if an error occurs.
 */
-int notify_suspend(const char *name);
+int state_suspend(const char *name);
 
 /**
   Resume notifications related to *name*
 
   @return 0 if successful, or -1 if an error occurs.
 */
-int notify_resume(const char *name);
+int state_resume(const char *name);
 
-#endif /* LIBLAUNCH_H_ */
+#endif /* _STATE_H */

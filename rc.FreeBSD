@@ -3,14 +3,14 @@
 # $FreeBSD$
 #
 
-# PROVIDE: notifyd
+# PROVIDE: stated
 # REQUIRE: DAEMON
 # BEFORE:  LOGIN
 
 . /etc/rc.subr
 
-name="notifyd"
-rcvar="notifyd_enable"
+name="stated"
+rcvar="stated_enable"
 command="/usr/local/sbin/${name}"
 
 load_rc_config $name

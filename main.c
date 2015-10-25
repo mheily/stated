@@ -31,6 +31,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "include/state.h"
 #include "log.h"
 
 struct state_s {
@@ -47,9 +48,9 @@ struct options_s {
 } options = {
 	.daemon = true,
 	.log_level = 0,
-	.pkgdatadir = "/var/run/notifyd",
-	.sysnotifydir = "/var/run/notifyd/system",
-	.usernotifydir = "/var/run/notifyd/user",
+	.pkgdatadir = STATE_PREFIX,
+	.sysnotifydir = "/var/state/system",
+	.usernotifydir = "/var/state/user",
 	.tmpfs_size = 268435456,
 };
 
@@ -77,6 +78,13 @@ static void setup_signal_handlers()
 static void mount_data_dirs() {
 	char *buf;
 
+	if (access(STATE_PREFIX, F_OK) < 0) {
+		if (errno == ENOENT) {
+			if (mkdir(STATE_PREFIX, 0755) < 0) abort();
+		} else {
+			abort();
+		}
+	}
 	if (asprintf(&buf, "mount -t tmpfs -o size=%zu tmpfs %s",
 			options.tmpfs_size, options.sysnotifydir) < 0)
 		abort();

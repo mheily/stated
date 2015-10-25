@@ -20,29 +20,32 @@ SBINDIR:=$(PREFIX)/sbin
 LIBEXECDIR:=$(PREFIX)/libexec
 DEBUGFLAGS=-g -O0 -DDEBUG
 
-all: notifyd notifyd-mkuser libstate.so
+all: stated stated-mkuser libstate.so
 
-notifyd:
+stated:
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ main.c log.c
 
-notifyd-mkuser:
-	$(CC) -static $(CFLAGS) $(LDFLAGS) -o $@ notifyd-mkuser.c
+stated-mkuser:
+	$(CC) -static $(CFLAGS) $(LDFLAGS) -o $@ stated-mkuser.c
 
 libstate.so:
 	$(CC) -fPIC -shared $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $@ client.c
 	
-notifyd-debug:
+stated-debug:
 	CFLAGS="$(DEBUGFLAGS)" $(MAKE) launchd
 
 clean:
 	rm -f *.o
-	rm -f notifyd notifyd-mkuser
+	rm -f stated stated-mkuser
 	
-install:
-	test -e notifyd || $(MAKE) notifyd
-	install -m 755 -o 0 -g 0 notifyd $(SBINDIR)
-	install -m 4755 -o 0 -g 0 notifyd-mkuser $(LIBEXECDIR)
-	install -m 755 -o 0 -g 0 rc.FreeBSD /usr/local/etc/rc.d/notifyd
-	install -d -m 755 -o 0 -g 0 /var/run/notifyd /var/run/notifyd/system /var/run/notifyd/user
+check:
+	cd test && $(MAKE) check
 
-.PHONY: all clean notifyd notifyd-mkuser libstate.so
+install:
+	test -e stated || $(MAKE) stated
+	install -m 755 -o 0 -g 0 stated $(SBINDIR)
+	install -m 4755 -o 0 -g 0 stated-mkuser $(LIBEXECDIR)
+	install -m 755 -o 0 -g 0 rc.FreeBSD /usr/local/etc/rc.d/stated
+	install -d -m 755 -o 0 -g 0 /var/state /var/state/system /var/state/user
+
+.PHONY: all clean stated stated-mkuser libstate.so

@@ -1,8 +1,7 @@
 .cproject
 .project
-/launchd
 .settings/
-/notifyd
-/notifyd-mkuser
+/stated
+/stated-mkuser
 /libstate.so
 /test/ntest

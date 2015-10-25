@@ -27,8 +27,8 @@
 
 #include <sys/queue.h>
 
-#include "include/notify.h"
 #include "binding.h"
+#include "include/state.h"
 
 static const size_t MAX_MSG_LEN = 4096; //FIXME: not very nice
 
@@ -47,10 +47,10 @@ static struct {
 static int mount_tmpfs() {
 	char *path;
 
-	if (asprintf(&path, "/var/run/notifyd/user/%d", getuid()) < 0)
+	if (asprintf(&path, "%s/user/%d", STATE_PREFIX, getuid()) < 0)
 		return -1;
 	if (access(path, F_OK) != 0) {
-		system("/usr/local/libexec/notifyd-mkuser");
+		system("/usr/local/libexec/stated-mkuser");
 		if (access(path, F_OK) != 0)
 			return -1;
 	}
@@ -61,11 +61,9 @@ static char *name_to_path(const char *name)
 	char *path = NULL;
 
 	const char *user_prefix = "user.";
-	//.sysnotifydir = "/var/run/notifyd/system",
-	//.usernotifydir = "/var/run/notifyd/user",
 
 	if (strncmp(name, user_prefix, strlen(user_prefix)) == 0) {
-		if (asprintf(&path, "/var/run/notifyd/user/%s", name + 5) < 0)
+		if (asprintf(&path, "%s/user/%s", STATE_PREFIX, name + 5) < 0)
 			return (NULL);
 		for (int i = 0; path[i]; i++) {
 			if (path[i] == '.') {
@@ -175,7 +173,7 @@ err_out:
 	return -1;
 }
 
-int notify_post(const char *name, const char *state, size_t len)
+int state_publish(const char *name, const char *state, size_t len)
 {
 	ssize_t written;
 	state_binding_t sb = NULL;
@@ -270,14 +268,14 @@ ssize_t state_check(notify_state_t changes, size_t nchanges) {
   this example:
 
 	dispatch_source_t source = dispatch_source_create(
-		DISPATCH_SOURCE_TYPE_READ, notify_get_fd(),
+		DISPATCH_SOURCE_TYPE_READ, state_get_fd(),
 		0, dispatch_get_main_queue());
 	dispatch_source_set_event_handler(source, ^{
 	    char *name, *state;
 	    ssize_t count;
 	    notify_state_t changes;
 
-	    count = notify_check(&changes, 1);
+	    count = state_check(&changes, 1);
 	    if (count == 1 && strcmp(changes.ns_name, "foo") == 0) {
 	       printf("the current state of foo is %s\n", changes.ns_state);
 	    }
@@ -295,7 +293,7 @@ int state_get_fd(void)
   Submit a block to be executed when one or more notifications are pending.
 
   This is basically a convenience function that implements the example code
-  shown in the documentation for notify_get_fd(). 
+  shown in the documentation for state_get_fd().
 
   You must include <dispatch/dispatch.h> and compile with -fblocks to have
   access to this function.
@@ -305,16 +303,16 @@ int state_get_fd(void)
   @param block the block of code to be executed
 */
 #if defined(__block) && defined(dispatch_queue_t)
-void notify_dispatch(char *name, dispatch_queue_t queue, void (^block)(void));
+void state_dispatch(char *name, dispatch_queue_t queue, void (^block)(void));
 #endif
 
 /**
   Execute a callback function when one or more notifications are pending.
 
-  This is equivalent to notify_dispatch(), but without using blocks.
+  This is equivalent to state_dispatch(), but without using blocks.
 */
 #ifdef dispatch_queue_t
-void notify_dispatch_f(char *name, dispatch_queue_t queue, void *context, void (*func)(void *));
+void state_dispatch_f(char *name, dispatch_queue_t queue, void *context, void (*func)(void *));
 #endif
 
 /**
@@ -322,7 +320,7 @@ void notify_dispatch_f(char *name, dispatch_queue_t queue, void *context, void (
 
   @return 0 if successful, or -1 if an error occurs.
 */
-int notify_suspend(const char *name)
+int state_suspend(const char *name)
 {
 	return -1;
 }
@@ -332,7 +330,7 @@ int notify_suspend(const char *name)
 
   @return 0 if successful, or -1 if an error occurs.
 */
-int notify_resume(const char *name)
+int state_resume(const char *name)
 {
 	return -1;
 }
