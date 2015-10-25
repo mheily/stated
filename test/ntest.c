@@ -19,7 +19,10 @@
 #include <stdlib.h>
 
 #include "../include/notify.h"
-#define run_test(_func) if (!test_##_func()) { puts("failed"); } else { puts("passed"); }
+#define run_test(_func) do { \
+	puts("running: "#_func); \
+	if (!test_##_func()) { puts("failed"); } else { puts("passed"); } \
+} while (0)
 
 int test_state_init()
 {
@@ -29,6 +32,12 @@ int test_state_init()
 int test_state_get_fd()
 {
 	return (state_get_fd() != 0);
+}
+
+int test_state_bind()
+{
+	const char *name = "user.1001.end.of.the.world.as.we.know.it";
+	return (state_bind(name, 0644) == 0);
 }
 
 int test_notify_post()
@@ -50,13 +59,14 @@ int test_state_check()
 	struct notify_state_s res;
 
 	if (state_check(&res, 1) < 1) return 0;
-	return (strcmp(res.ns_name, name) == 0);
+	return (strcmp(res.ns_state, "I feel fine") == 0);
 }
 
 int main(int argc, char *argv[]) {
 	run_test(state_init);
 	run_test(state_get_fd);
 	//TODO: test subscribe() before publish()
+	run_test(state_bind);
 	run_test(notify_post); // KLUDGE: ensures that the name fd exists
 	run_test(state_subscribe);
 	run_test(notify_post);

@@ -1,6 +1,8 @@
 #ifndef NOTIFY_H_
 #define NOTIFY_H_
 
+#include <sys/stat.h>
+
 /** A notification about a state change. */
 struct notify_state_s {
   char   *ns_name;	
@@ -15,6 +17,16 @@ typedef struct notify_state_s * notify_state_t;
   @return 0 if successful, or -1 if an error occurs.
 */
 int state_init();
+
+/**
+  Acquire the ability to publish notifications about a *name*
+
+  @param name the name to acquire
+  @param mode who can subscribe (owner, group, and/or everybody)
+
+  @return 0 if successful, or -1 if an error occurs.
+ */
+int state_bind(const char *name, mode_t mode);
 
 /**
   Subscribe to notifications about a *name*.

@@ -4,4 +4,5 @@
 .settings/
 /notifyd
 /notifyd-mkuser
-/libnotify.so
+/libstate.so
+/test/ntest
