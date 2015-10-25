@@ -34,16 +34,15 @@ isn't working yet.
 Here is a simple example that shows two programs; one acting as the publisher, 
 and the other as the subscriber.
 
-	publisher.c
-	-----------
-	
+The code for the publisher:
+```C	
 	state_init();
 	state_bind("com.example.hello_world", 0644);
 	state_publish("com.example.hello_world", "hi", 2);
-	
-	subscriber.c
-	------------
-	
+```
+
+The code for the subscriber:
+```C
 	state_init();
 	state_subscribe("com.example.hello_world");
 	for (;;) {
@@ -64,3 +63,4 @@ and the other as the subscriber.
 			printf("the new state is: %s\n", ns->ns_state);
 		}
 	}
+```
