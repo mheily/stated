@@ -21,6 +21,14 @@ To enable stated to start at boot, run the following commands as root(for FreeBS
 	echo 'stated_enable="YES"' >> /etc/rc.conf
 	service stated start
 	
+# Bugs
+
+stated should be considered beta-quality software, and there are known bugs.
+
+The biggest problem is that the codepaths for publishing "system" state are
+incomplete. This means that publishing state for processes running under uid 0
+isn't working yet.
+
 # Example usage
 
 Here is a simple example that shows two programs; one acting as the publisher, 
