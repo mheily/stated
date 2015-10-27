@@ -14,28 +14,38 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef BINDING_H_
-#define BINDING_H_
+#ifndef SUBSCRIPTION_H_
+#define SUBSCRIPTION_H_
 
-struct state_binding_s {
-	SLIST_ENTRY(state_binding_s) entry;
-	int fd;
-	char *name;
-	char *path;
-	size_t maxlen; /* Maximum amount of state data that can be published */
+#include "include/state.h"
+#include "binding.h"
+
+struct subscription_s {
+	SLIST_ENTRY(subscription_s) entry;
+	int   sub_fd;
+	char *sub_name;
+	char *sub_path;
 };
-typedef struct state_binding_s * state_binding_t;
+typedef struct subscription_s * subscription_t;
 
-static inline void state_binding_free(state_binding_t sb)
+static subscription_t subscription_new()
 {
-	if (sb) {
-		if (sb->fd >= 0) {
-			(void) close(sb->fd);
-		}
-		free(sb->name);
-		free(sb->path);
-		free(sb);
+	subscription_t sub;
+
+	sub = calloc(1, sizeof(*sub));
+	if (!sub) return NULL;
+	sub->sub_fd = -1;
+	return sub;
+}
+
+static inline void subscription_free(subscription_t sub)
+{
+	if (sub) {
+		if (sub->sub_fd >= 0) (void)close(sub->sub_fd);
+		free(sub->sub_name);
+		free(sub->sub_path);
+		free(sub);
 	}
 }
 
-#endif /* BINDING_H_ */
+#endif /* SUBSCRIPTION_H_ */

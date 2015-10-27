@@ -1,0 +1,2 @@
+* Memory leaks around the returning of state notifications.. lots of strdup'ing but the caller
+has no way to free the structure.
