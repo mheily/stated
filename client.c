@@ -27,6 +27,7 @@
 
 #include <sys/queue.h>
 
+#include "log.h"
 #include "binding.h"
 #include "include/state.h"
 
@@ -37,6 +38,8 @@ static const size_t MAX_MSG_LEN = 4096; //FIXME: not very nice
 
 static struct {
 	int kqfd;
+	char *userprefix;
+	char *userstatedir;
 	int subfd[MAX_SUBSCRIPTIONS];
 	struct notify_state_s curstate[MAX_SUBSCRIPTIONS];
 	SLIST_HEAD(, state_binding_s) bound_states; /* maintaned by state_bind() */
@@ -44,37 +47,105 @@ static struct {
 	pthread_mutex_t mtx;
 } libstate_data;
 
-static int mount_tmpfs() {
-	char *path;
+static int create_user_dirs() {
 
-	if (asprintf(&path, "%s/user/%d", STATE_PREFIX, getuid()) < 0)
+	/* Programs running as root use the global statedir */
+	if (getuid() == 0)
+		return 0;
+
+	if (getenv("HOME") == NULL) {
+		//TODO: use getpwuid to lookup the home directory
 		return -1;
-	if (access(path, F_OK) != 0) {
-		system("/usr/local/libexec/stated-mkuser");
-		if (access(path, F_OK) != 0)
+	}
+	if (asprintf(&libstate_data.userprefix, "%s/.libstate", getenv("HOME")) < 0)
+		return -1;
+	if (asprintf(&libstate_data.userstatedir, "%s/run", libstate_data.userprefix) < 0)
+		return -1;
+	if (access(libstate_data.userprefix, F_OK) != 0) {
+		if (mkdir(libstate_data.userprefix, 0700) < 0) {
 			return -1;
+		}
+	}
+	if (access(libstate_data.userstatedir, F_OK) != 0) {
+		if (mkdir(libstate_data.userstatedir, 0700) < 0) {
+			return -1;
+		}
 	}
 	return 0;
 }
+
+static int name_to_id(char *name)
+{
+	if (name[0] == '.') {
+		log_error("illegal character in name");
+		return -1;
+	}
+
+	/* TODO: want to mkdir for each component in a name, e.g. foo.bar.baz becomes
+	 *    foo/bar/baz, with directories created for foo and bar
+	 */
+	return 0;
+
+	for (int i = 0; name[i]; i++) {
+		if (name[i] == '.') {
+			name[i] = '/';
+		}
+	}
+	return 0;
+}
+
 static char *name_to_path(const char *name)
 {
+	char *id = NULL;
 	char *path = NULL;
+	bool is_user_path = false;
 
 	const char *user_prefix = "user.";
 
 	if (strncmp(name, user_prefix, strlen(user_prefix)) == 0) {
-		if (asprintf(&path, "%s/user/%s", STATE_PREFIX, name + 5) < 0)
-			return (NULL);
-		for (int i = 0; path[i]; i++) {
-			if (path[i] == '.') {
-				path[i] = '/';
-				break;
-			}
+		id = strdup(name + 5);
+		is_user_path = true;
+	} else {
+		id = strdup(name);
+	}
+	if (!id) goto err_out;
+
+	if (name_to_id(id) < 0) goto err_out;
+
+	if (is_user_path) {
+		if (asprintf(&path, "%s/%s", libstate_data.userstatedir, id) < 0) {
+			goto err_out;
 		}
 	} else {
-		abort();//STUB
+		if (asprintf(&path, "%s/%s", STATE_PREFIX, id) < 0) {
+			goto err_out;
+		}
 	}
+
+	free(id);
 	return path;
+
+err_out:
+	free(id);
+	free(path);
+	return NULL;
+}
+
+static int setup_logging()
+{
+	char *path;
+
+	if (asprintf(&path, "%s/client.log", libstate_data.userprefix) < 0)
+		return -1;
+	if (log_open(path) < 0) {
+		free(path);
+		return -1;
+	}
+	free(path);
+
+	log_debug("userprefix=%s userstatedir=%s", libstate_data.userprefix, libstate_data.userstatedir);
+
+	return 0;
 }
 
 int state_init() {
@@ -88,7 +159,10 @@ int state_init() {
 	memset(&libstate_data.subfd, -1, sizeof(libstate_data.subfd));
 	if ((libstate_data.kqfd = kqueue()) < 0)
 		return -1;
-	mount_tmpfs();
+	if (create_user_dirs() < 0)
+		return -1;
+	if (setup_logging() < 0)
+		return -1;
 	pthread_mutex_init(&libstate_data.mtx, NULL);
 	initialized = true;
 	return 0;
@@ -106,8 +180,10 @@ int state_bind(const char *name, mode_t mode)
 	sb->path = name_to_path(name);
 	if (!sb->path) goto err_out;
 
-	if ((sb->fd = open(sb->path, O_CREAT | O_TRUNC | O_WRONLY, mode)) < 0)
+	if ((sb->fd = open(sb->path, O_CREAT | O_TRUNC | O_WRONLY, mode)) < 0) {
+		log_errno("open(2) of %s", sb->path);
 		goto err_out;
+	}
 
 	pthread_mutex_lock(&libstate_data.mtx);
 	SLIST_INSERT_HEAD(&libstate_data.bound_states, sb, entry);
@@ -118,6 +194,7 @@ int state_bind(const char *name, mode_t mode)
 	return 0;
 
 err_out:
+	log_error("unable to bind to %s", name);
 	state_binding_free(sb);
 	return -1;
 }

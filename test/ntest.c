@@ -36,26 +36,26 @@ int test_state_get_fd()
 
 int test_state_bind()
 {
-	const char *name = "user.1001.end.of.the.world.as.we.know.it";
+	const char *name = "user.example.status";
 	return (state_bind(name, 0644) == 0);
 }
 
 int test_state_publish()
 {
-	const char *name = "user.1001.end.of.the.world.as.we.know.it";
+	const char *name = "user.example.status";
 	const char *state = "I feel fine";
 	return (state_publish(name, state, strlen(state)) == 0);
 }
 
 int test_state_subscribe()
 {
-	const char *name = "user.1001.end.of.the.world.as.we.know.it";
+	const char *name = "user.example.status";
 	return (state_subscribe(name) == 0);
 }
 
 int test_state_check()
 {
-	const char *name = "user.1001.end.of.the.world.as.we.know.it";
+	const char *name = "user.example.status";
 	struct notify_state_s res;
 
 	if (state_check(&res, 1) < 1) return 0;

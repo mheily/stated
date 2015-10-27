@@ -2,6 +2,5 @@
 .project
 .settings/
 /stated
-/stated-mkuser
 /libstate.so
 /test/ntest

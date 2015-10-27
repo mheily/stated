@@ -20,23 +20,20 @@ SBINDIR:=$(PREFIX)/sbin
 LIBEXECDIR:=$(PREFIX)/libexec
 DEBUGFLAGS=-g -O0 -DDEBUG
 
-all: stated stated-mkuser libstate.so
+all: stated libstate.so
 
 stated:
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ main.c log.c
 
-stated-mkuser:
-	$(CC) -static $(CFLAGS) $(LDFLAGS) -o $@ stated-mkuser.c
-
 libstate.so:
-	$(CC) -fPIC -shared $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $@ client.c
+	$(CC) -fPIC -shared $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $@ client.c log.c
 	
 stated-debug:
 	CFLAGS="$(DEBUGFLAGS)" $(MAKE) launchd
 
 clean:
 	rm -f *.o
-	rm -f stated stated-mkuser
+	rm -f libstate.so stated
 	
 check:
 	cd test && $(MAKE) check
@@ -44,8 +41,7 @@ check:
 install:
 	test -e stated || $(MAKE) stated
 	install -m 755 -o 0 -g 0 stated $(SBINDIR)
-	install -m 4755 -o 0 -g 0 stated-mkuser $(LIBEXECDIR)
 	install -m 755 -o 0 -g 0 rc.FreeBSD /usr/local/etc/rc.d/stated
 	install -d -m 755 -o 0 -g 0 /var/state /var/state/system /var/state/user
 
-.PHONY: all clean stated stated-mkuser libstate.so
+.PHONY: all clean stated libstate.so
