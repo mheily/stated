@@ -80,11 +80,11 @@ int test_state_get()
 }
 
 int main(int argc, char *argv[]) {
+	//TODO: clear any existing state files
 	run_test(state_init);
 	run_test(state_get_fd);
-	run_test(state_bind);
-	run_test(state_publish); // KLUDGE: ensures that the name fd exists, we should test subscribe() before publish()
 	run_test(state_subscribe);
+	run_test(state_bind);
 	run_test(state_publish);
 	run_test(state_check);
 	run_test(state_get);

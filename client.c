@@ -207,20 +207,17 @@ int state_subscribe(const char *name)
 	if (!sub->sub_name || !sub->sub_path)
 		goto err_out;
 
-	/** XXX-FIXME will not work if the publisher has not opened the file yet */
-	printf("watching %s\n", sub->sub_path);
-	sub->sub_fd = open(sub->sub_path, O_RDONLY);
+	sub->sub_fd = open(sub->sub_path, O_CREAT | O_RDONLY);
 	if (sub->sub_fd < 0) {
 		log_errno("open(2) of %s", sub->sub_path);
 		goto err_out;
 	}
 
-	EV_SET(&kev, sub->sub_fd, EVFILT_VNODE, EV_ADD, NOTE_ATTRIB | NOTE_WRITE, 0, 0);
-
 	pthread_mutex_lock(&libstate_data.mtx);
 	SLIST_INSERT_HEAD(&libstate_data.subscriptions, sub, entry);
 	pthread_mutex_unlock(&libstate_data.mtx);
 
+	EV_SET(&kev, sub->sub_fd, EVFILT_VNODE, EV_ADD, NOTE_ATTRIB | NOTE_WRITE, 0, 0);
 	rv = kevent(libstate_data.kqfd, &kev, 1, NULL, 0, NULL);
 	if (rv < 0) {
 		log_errno("kevent(2)");
@@ -345,7 +342,7 @@ int	state_get(const char *key, char **value)
 ssize_t state_check(char **key, char **value) {
 	const struct timespec ts = { 0, 0 };
 	subscription_t subp, sub = NULL;
-	struct kevent kev; //FIXME: make this a bigger buffer
+	struct kevent kev;
 	ssize_t nret;
 
 	if (key == NULL || value == NULL) return -1;
@@ -357,7 +354,7 @@ ssize_t state_check(char **key, char **value) {
 	if (nret == 0)
 		return 0;
 	if ((kev.fflags & NOTE_ATTRIB) || (kev.fflags & NOTE_WRITE)) {
-		printf("fd %u written", (unsigned int) kev.ident);
+		log_debug("fd %u written", (unsigned int) kev.ident);
 	} else {
 		return -1;
 	}
