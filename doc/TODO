@@ -1,10 +1,9 @@
 * Add a state_mount () function  to do a mount nullfs of the global state directory to a 
 directory of the users choice, so that root daemons can chroot and still access state.
 
-* Switch from using linked lists to hashes for internal state data, so that it can scale to
-larger numbers of pub/sub names.
+* Implement the suspend and resume API functions.
 
-* Implement the libdispatch-related API functions
+* Implement the libdispatch-related API functions.
 
 * Add a state_atexit() function that deallocates all internal state and is the companion
 to state_init(). This will make valgrinding possible in the future.

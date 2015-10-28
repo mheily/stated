@@ -56,10 +56,27 @@ int test_state_subscribe()
 int test_state_check()
 {
 	const char *name = "user.example.status";
-	struct notify_state_s res;
+	char *key, *value;
+	size_t len;
 
-	if (state_check(&res, 1) < 1) return 0;
-	return (strcmp(res.ns_state, "I feel fine") == 0);
+	len = state_check(&key, &value);
+	if (len <= 0) return 0;
+	if (strcmp(key, name) != 0) return 0;
+	if (strcmp(value, "I feel fine") != 0) return 0;
+	return 1;
+}
+
+int test_state_get()
+{
+	const char *name = "user.example.status";
+	char *value;
+	if (state_get(name, &value) < 0) return 0;
+	if (strcmp(value, "I feel fine") != 0) return 0;
+
+	if (state_get("...an invalid name....", &value) >= 0) return 0;
+	if (value) return 0;
+
+	return 1;
 }
 
 int main(int argc, char *argv[]) {
@@ -70,6 +87,7 @@ int main(int argc, char *argv[]) {
 	run_test(state_subscribe);
 	run_test(state_publish);
 	run_test(state_check);
+	run_test(state_get);
 	puts("ok");
 	exit(0);
 }

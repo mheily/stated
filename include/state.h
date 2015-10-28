@@ -21,20 +21,12 @@
 
 #define STATE_PREFIX "/var/state"
 
-/** A notification about a state change. */
-struct notify_state_s {
-  char   *ns_name;	
-  char   *ns_state;	/* The current state */
-  size_t  ns_len;	/* The amount of data stored in ns_state */
-};
-typedef struct notify_state_s * notify_state_t;
-
 /** 
   Initialize the state notification mechanism.
 
   @return 0 if successful, or -1 if an error occurs.
 */
-int state_init();
+int state_init(void);
 
 /**
   Acquire the ability to publish notifications about a *name*
@@ -68,14 +60,24 @@ int state_publish(const char *name, const char *state, size_t len);
 /** 
   Check for pending notifications, and return the current state.
 
-  @param changes A buffer to write the notifications to
-  @param nchanges The number of changes that can be stored in the buffer
+  @param key Will be filled in with the published name
+  @param value The current value of the state
 
-  @return the number of notifications retrieved,
-	  0 if no notifications are available,
+  @return the length of the *value* string, or,
+	  0 if no new notifications were available,
 	  or -1 if an error occurs.
 */
-ssize_t state_check(notify_state_t changes, size_t nchanges);
+ssize_t state_check(char **key, char **value);
+
+/**
+  Get the current state of a <name>.
+
+  @param name the name of the notification
+  @param value a string that will be modified to point at the current state
+
+  @return the length of the <value> string, or -1 if an error occurred
+*/
+int state_get(const char *key, char **value);
 
 /**
   Get a file descriptor that can be monitored for readability.
@@ -91,12 +93,11 @@ ssize_t state_check(notify_state_t changes, size_t nchanges);
 		0, dispatch_get_main_queue());
 	dispatch_source_set_event_handler(source, ^{
 	    char *name, *state;
-	    ssize_t count;
-	    notify_state_t changes;
+	    ssize_t len;
 
-	    count = notify_check(&changes, 1);
-	    if (count == 1 && strcmp(changes.ns_name, "foo") == 0) {
-	       printf("the current state of foo is %s\n", changes.ns_state);
+	    len = state_check(&name, &state);
+	    if (len > 0) {
+	       printf("state update: %s is now %s\n", name, state);
 	    }
     	});
     	dispatch_resume(source);

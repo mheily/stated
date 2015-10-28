@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <sys/event.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #include <sys/queue.h>
@@ -168,7 +169,6 @@ int state_init() {
 int state_bind(const char *name, mode_t mode)
 {
 	state_binding_t sb = NULL;
-	mode_t create_mode;
 
 	sb = calloc(1, sizeof(*sb));
 	if (!sb) goto err_out;
@@ -185,8 +185,6 @@ int state_bind(const char *name, mode_t mode)
 	pthread_mutex_lock(&libstate_data.mtx);
 	SLIST_INSERT_HEAD(&libstate_data.bound_states, sb, entry);
 	pthread_mutex_unlock(&libstate_data.mtx);
-
-	//TODO: send a global notification that the set of state bindings has changed
 
 	return 0;
 
@@ -238,18 +236,17 @@ err_out:
 
 int state_publish(const char *name, const char *state, size_t len)
 {
+	const char nul = '\0';
 	ssize_t written;
 	state_binding_t sbp, sb = NULL;
-	struct {
-		size_t len;
-		char buf[MAX_MSG_LEN];
-	} msg;
-	size_t msg_size;
+	struct iovec iov[3];
 
-	if (len >= MAX_MSG_LEN) return -1;
-	msg.len = len;
-	memcpy(&msg.buf, state, len + 1);
-	msg_size = sizeof(len) + len + 1;
+	iov[0].iov_base = &len;
+	iov[0].iov_len = sizeof(len);
+	iov[1].iov_base = (char *) state;
+	iov[1].iov_len = len;
+	iov[2].iov_base = (char *) &nul;
+	iov[2].iov_len = 1;
 
 	pthread_mutex_lock(&libstate_data.mtx);
 	SLIST_FOREACH(sbp, &libstate_data.bound_states, entry) {
@@ -264,18 +261,95 @@ int state_publish(const char *name, const char *state, size_t len)
 		return (-1);
 	}
 
-	written = pwrite(sb->fd, &msg, msg_size, 0);
-	if (written < msg_size) return -1;
-	printf("updated state of %s\n", sb->path);
+	written = pwritev(sb->fd, iov, 3, 0);
+	if (written < (len + sizeof(len) + 1)) {
+		if (written < 0) {
+			log_errno("pwritev(3)");
+		} else {
+			log_error("short write");
+		}
+		return -1;
+	}
 
 	return 0;
 }
 
-ssize_t state_check(notify_state_t changes, size_t nchanges) {
+/* Update the current state of a subscription */
+static int subscription_update(subscription_t sub)
+{
+	struct stat sb;
+	size_t      newlen;
+	ssize_t     nret;
+
+retry:
+	if (fstat(sub->sub_fd, &sb) < 0) {
+		log_errno("fstat");
+		return -1;
+	}
+	if (sb.st_size == SIZE_MAX) return -1;
+	if (sub->sub_bufsz <= sb.st_size) {
+		char *newbuf = realloc(sub->sub_buf, sb.st_size + 1);
+		if (newbuf == NULL) {
+			log_errno("realloc");
+			return -1;
+		}
+		sub->sub_buf = newbuf;
+		sub->sub_bufsz = sb.st_size + 1;
+	}
+	nret = pread(sub->sub_fd, sub->sub_buf, sb.st_size, 0);
+	if (nret < 0) {
+		log_errno("pread(2)");
+		return -1;
+	}
+	if (nret < sizeof(size_t)) {
+		log_warning("state file %s is invalid; too short", sub->sub_path);
+		return -1;
+	}
+	memcpy(&newlen, sub->sub_buf, sizeof(newlen));
+	if (newlen >= nret) {
+		/* FIXME: DoS risk, could loop forever with a malicious statefile */
+		log_debug("size of statefile grew; will re-read it");
+		goto retry;
+	}
+	sub->sub_buflen = newlen;
+	return 0;
+}
+
+int	state_get(const char *key, char **value)
+{
+	subscription_t subp, sub = NULL;
+
+	pthread_mutex_lock(&libstate_data.mtx);
+	SLIST_FOREACH(subp, &libstate_data.subscriptions, entry) {
+		if (strcmp(subp->sub_name, key) == 0) {
+			sub = subp;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&libstate_data.mtx);
+	if (sub == NULL) {
+		log_debug("no entry for lookup");
+		*value = NULL;
+		return -1;
+	}
+	if (subscription_update(sub) < 0) {
+		log_debug("failed to update subscription");
+		*value = NULL;
+		return -1;
+	}
+
+	*value = sub->sub_buf + sizeof(size_t);
+	return sub->sub_buflen;
+}
+
+ssize_t state_check(char **key, char **value) {
 	const struct timespec ts = { 0, 0 };
 	subscription_t subp, sub = NULL;
 	struct kevent kev; //FIXME: make this a bigger buffer
 	ssize_t nret;
+
+	if (key == NULL || value == NULL) return -1;
+	*value = NULL;
 
 	nret = kevent(libstate_data.kqfd, NULL, 0, &kev, 1, &ts);
 	if (nret < 0)
@@ -301,37 +375,14 @@ ssize_t state_check(notify_state_t changes, size_t nchanges) {
 		return (-1);
 	}
 
-	const size_t bufsz = 4096;
-	struct {
-		size_t len;
-		char buf[bufsz];
-	} msg;
-
-	printf("got name=%s\n", sub->sub_name);
-	changes[0].ns_name = strdup(sub->sub_name);
-	if (!changes[0].ns_name) {
-		log_error("strdup(3)");
-		return -1;
+	if (subscription_update(sub) < 0) {
+		log_error("failed to update the state of %s", sub->sub_name);
+		return (-1);
 	}
 
-	for (;;) {
-		nret = pread(kev.ident, &msg, sizeof(msg), 0);
-		if (nret < 0) return -1;
-		printf("read %zd bytes\n", nret);
-		//FIXME: handle the case where bufsz is smaller than buf.len.
-		// we should malloc a new buffer and re-read from the fd
-		if (nret < msg.len || msg.len > (bufsz -1)) {
-			return -1;
-		}
-		memset(&msg.buf[msg.len + 1], 0, 1); // ensure NUL termination
-		free(changes->ns_state);
-		changes->ns_state = strdup(msg.buf);
-		changes->ns_len = msg.len;
-		printf("new state: %zu bytes, value: %s\n", changes->ns_len, changes->ns_state);
-		break;
-	}
-
-	return 1;
+	*key = sub->sub_name;
+	*value = sub->sub_buf + sizeof(size_t);
+	return sub->sub_buflen;
 }
 
 int state_get_fd(void)

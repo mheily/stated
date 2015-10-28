@@ -22,9 +22,13 @@
 
 struct subscription_s {
 	SLIST_ENTRY(subscription_s) entry;
-	int   sub_fd;
-	char *sub_name;
-	char *sub_path;
+	int     sub_fd;
+	char   *sub_name;
+	char   *sub_path;
+
+	/* The current state of <sub_name> is stored below */
+	char   *sub_buf;
+	size_t  sub_buflen, sub_bufsz;
 };
 typedef struct subscription_s * subscription_t;
 
@@ -44,6 +48,7 @@ static inline void subscription_free(subscription_t sub)
 		if (sub->sub_fd >= 0) (void)close(sub->sub_fd);
 		free(sub->sub_name);
 		free(sub->sub_path);
+		free(sub->sub_buf);
 		free(sub);
 	}
 }
