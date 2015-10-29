@@ -33,6 +33,7 @@
 
 #include "include/state.h"
 #include "log.h"
+#include "platform.h"
 
 struct state_s {
 	int kqfd;
@@ -41,16 +42,12 @@ struct state_s {
 struct options_s {
 	bool daemon;
 	int log_level;
-	char *pkgdatadir;
-	char *sysnotifydir;
-	char *usernotifydir;
+	char *notifydir;
 	size_t tmpfs_size;
 } options = {
 	.daemon = true,
 	.log_level = 0,
-	.pkgdatadir = STATE_PREFIX,
-	.sysnotifydir = "/var/state/system",
-	.usernotifydir = "/var/state/user",
+	.notifydir = STATE_PREFIX,
 	.tmpfs_size = 268435456,
 };
 
@@ -78,23 +75,15 @@ static void setup_signal_handlers()
 static void mount_data_dirs() {
 	char *buf;
 
-	if (access(STATE_PREFIX, F_OK) < 0) {
+	if (access(options.notifydir, F_OK) < 0) {
 		if (errno == ENOENT) {
-			if (mkdir(STATE_PREFIX, 0755) < 0) abort();
+			if (mkdir(options.notifydir, 0755) < 0) abort();
 		} else {
 			abort();
 		}
 	}
 	if (asprintf(&buf, "mount -t tmpfs -o size=%zu tmpfs %s",
-			options.tmpfs_size, options.sysnotifydir) < 0)
-		abort();
-
-	if (system(buf) != 0)
-		abort();
-	free(buf);
-
-	if (asprintf(&buf, "mount -t tmpfs -o size=%zu tmpfs %s",
-			options.tmpfs_size, options.usernotifydir) < 0)
+			options.tmpfs_size, options.notifydir) < 0)
 		abort();
 
 	if (system(buf) != 0)
@@ -105,7 +94,7 @@ static void mount_data_dirs() {
 static void umount_data_dirs() {
 	char *buf;
 
-	if (asprintf(&buf, "umount -f %s %s", options.sysnotifydir, options.usernotifydir) < 0)
+	if (asprintf(&buf, "umount -f %s %s", options.notifydir, options.notifydir) < 0)
 		abort();
 
 	if (system(buf) != 0)
@@ -153,18 +142,19 @@ static void main_loop() {
 	}
 }
 
-int main(int argc, char *argv[]) {
-    if (options.daemon && daemon(0, 0) < 0) {
+int main(int argc, char *argv[]) 
+{
+	if (options.daemon && daemon(0, 0) < 0) {
 		fprintf(stderr, "Unable to daemonize");
 		exit(EX_OSERR);
-		log_open("/var/log/notifyd.log");
-    } else {
-        log_open("/dev/stderr");
-    }
+		log_open("/var/log/stated.log");
+	} else {
+		log_open("/dev/stderr");
+	}
 
-    if ((state.kqfd = kqueue()) < 0) abort();
+	if ((state.kqfd = kqueue()) < 0) abort();
 
-    setup_signal_handlers();
+	setup_signal_handlers();
 	mount_data_dirs();
 	main_loop();
 	exit(EXIT_SUCCESS);

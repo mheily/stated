@@ -4,3 +4,6 @@
 /stated
 /libstate.so
 /test/ntest
+/test/ntest.log
+platform.h
+*.core

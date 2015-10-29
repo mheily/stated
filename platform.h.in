@@ -14,23 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <stdlib.h>
+#ifndef PLATFORM_H_
+#define PLATFORM_H_
 
-#include "log.h"
+#define PACKAGE_VERSION "@@PACKAGE_VERSION@@"
+#define MAJOR_VERSION @@MAJOR_VERSION@@
+#define MINOR_VERSION @@MINOR_VERSION@@
+#define PATCH_VERSION @@PATCH_VERSION@@
 
-FILE *logfile;
+#define USE_KQUEUE @@USE_KQUEUE@@
+#define USE_INOTIFY @@USE_INOTIFY@@
+#define STATE_PREFIX "@@STATE_PREFIX@@"
 
-int log_open(const char *path)
-{
-	if (!path) return -1;
-	logfile = fopen(path, "a");
-	if (!logfile) return -1;
-	return (0);
-	log_info("log started");
-}
-
-int log_close(void)
-{
-	if (!logfile) return -1;
-	return fclose(logfile);
-}
+#endif /* PLATFORM_H_ */

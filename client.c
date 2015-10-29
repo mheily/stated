@@ -30,26 +30,21 @@
 
 #include "log.h"
 #include "binding.h"
+#include "platform.h"
 #include "subscription.h"
 #include "include/state.h"
-
-static const size_t MAX_MSG_LEN = 4096; //FIXME: not very nice
 
 static struct {
 	int kqfd;
 	char *userprefix;
 	char *userstatedir;
-	SLIST_HEAD(, subscription_s) subscriptions; /* maintained by state_subscribe() */
-	SLIST_HEAD(, state_binding_s) bound_states; /* maintaned by state_bind() */
-	size_t nsubfd;
+	SLIST_HEAD(, subscription_s) subscriptions;
+	SLIST_HEAD(, state_binding_s) bindings;
 	pthread_mutex_t mtx;
+	bool initialized; 
 } libstate_data;
 
 static int create_user_dirs() {
-
-	/* Programs running as root use the global statedir */
-	if (getuid() == 0)
-		return 0;
 
 	if (getenv("HOME") == NULL) {
 		//TODO: use getpwuid to lookup the home directory
@@ -106,7 +101,10 @@ static char *name_to_path(const char *name)
 	} else {
 		id = strdup(name);
 	}
-	if (!id) goto err_out;
+	if (!id) {
+		log_errno("strdup(3)");
+		goto err_out;
+	}
 
 	if (name_to_id(id) < 0) goto err_out;
 
@@ -129,44 +127,77 @@ err_out:
 	return NULL;
 }
 
-static int setup_logging()
+static state_binding_t state_binding_lookup(const char *name)
 {
-	char *path;
+	state_binding_t sbp;
 
-	if (asprintf(&path, "%s/client.log", libstate_data.userprefix) < 0)
-		return -1;
-	if (log_open(path) < 0) {
-		free(path);
-		return -1;
-	}
-	free(path);
-
-	log_debug("userprefix=%s userstatedir=%s", libstate_data.userprefix, libstate_data.userstatedir);
-
-	return 0;
+        pthread_mutex_lock(&libstate_data.mtx);
+        SLIST_FOREACH(sbp, &libstate_data.bindings, entry) {
+                if (strcmp(sbp->name, name) == 0) {
+        		pthread_mutex_unlock(&libstate_data.mtx);
+			return sbp;
+                }
+        }
+        pthread_mutex_unlock(&libstate_data.mtx);
+	return NULL;
 }
 
-int state_init() {
-	static bool initialized = false;
+int state_init(int abi_version, int flags) {
+	/* These are not used yet */
+	(void) abi_version;
+	(void) flags;
 
 	/* FIXME: not threadsafe */
-	if (initialized)
+	if (libstate_data.initialized)
 		return -1;
-	libstate_data.nsubfd = 0;
-	SLIST_INIT(&libstate_data.bound_states);
+	SLIST_INIT(&libstate_data.bindings);
 	SLIST_INIT(&libstate_data.subscriptions);
 	if ((libstate_data.kqfd = kqueue()) < 0)
 		return -1;
 	if (create_user_dirs() < 0)
 		return -1;
-	if (setup_logging() < 0)
-		return -1;
 	pthread_mutex_init(&libstate_data.mtx, NULL);
-	initialized = true;
+	libstate_data.initialized = true;
 	return 0;
 }
 
-int state_bind(const char *name, mode_t mode)
+int state_openlog(const char *path)
+{
+	return log_open(path);
+}
+
+int state_closelog(void)
+{
+	return log_close();
+}
+
+void state_atexit(void)
+{
+	state_binding_t sbp, sbp_tmp;
+	subscription_t sub, sub_tmp;
+
+	if (!libstate_data.initialized)
+		return;
+
+        free(libstate_data.userprefix);
+        free(libstate_data.userstatedir);
+	(void) close(libstate_data.kqfd);
+        SLIST_FOREACH_SAFE(sbp, &libstate_data.bindings, entry, sbp_tmp) {
+     		SLIST_REMOVE(&libstate_data.bindings, sbp, state_binding_s, entry);
+		(void) unlink(sbp->path);
+     		state_binding_free(sbp);
+	}
+        SLIST_FOREACH_SAFE(sub, &libstate_data.subscriptions, entry, sub_tmp) {
+     		SLIST_REMOVE(&libstate_data.subscriptions, sub, subscription_s, entry);
+     		subscription_free(sub);
+	}
+	log_debug("shutting down");
+	(void) pthread_mutex_destroy(&libstate_data.mtx);
+	(void) log_close();
+	libstate_data.initialized = false;
+}
+
+int state_bind(const char *name)
 {
 	state_binding_t sb = NULL;
 
@@ -177,13 +208,13 @@ int state_bind(const char *name, mode_t mode)
 	sb->path = name_to_path(name);
 	if (!sb->path) goto err_out;
 
-	if ((sb->fd = open(sb->path, O_CREAT | O_TRUNC | O_WRONLY, mode)) < 0) {
+	if ((sb->fd = open(sb->path, O_CREAT | O_TRUNC | O_WRONLY, 0644)) < 0) {
 		log_errno("open(2) of %s", sb->path);
 		goto err_out;
 	}
 
 	pthread_mutex_lock(&libstate_data.mtx);
-	SLIST_INSERT_HEAD(&libstate_data.bound_states, sb, entry);
+	SLIST_INSERT_HEAD(&libstate_data.bindings, sb, entry);
 	pthread_mutex_unlock(&libstate_data.mtx);
 
 	return 0;
@@ -192,6 +223,24 @@ err_out:
 	log_error("unable to bind to %s", name);
 	state_binding_free(sb);
 	return -1;
+}
+
+int state_unbind(const char *name)
+{
+	state_binding_t sb;
+
+	sb = state_binding_lookup(name);
+	if (sb == NULL) {
+		log_error("name not bound: %s", name);
+		return (-1);
+	}
+        pthread_mutex_lock(&libstate_data.mtx);
+     	SLIST_REMOVE(&libstate_data.bindings, sb, state_binding_s, entry);
+        pthread_mutex_lock(&libstate_data.mtx);
+     	state_binding_free(sb);
+	log_debug("unbound %s", name);
+
+	return 0;
 }
 
 int state_subscribe(const char *name)
@@ -207,7 +256,7 @@ int state_subscribe(const char *name)
 	if (!sub->sub_name || !sub->sub_path)
 		goto err_out;
 
-	sub->sub_fd = open(sub->sub_path, O_CREAT | O_RDONLY);
+	sub->sub_fd = open(sub->sub_path, O_CREAT | O_RDONLY, 0644);
 	if (sub->sub_fd < 0) {
 		log_errno("open(2) of %s", sub->sub_path);
 		goto err_out;
@@ -217,7 +266,8 @@ int state_subscribe(const char *name)
 	SLIST_INSERT_HEAD(&libstate_data.subscriptions, sub, entry);
 	pthread_mutex_unlock(&libstate_data.mtx);
 
-	EV_SET(&kev, sub->sub_fd, EVFILT_VNODE, EV_ADD, NOTE_ATTRIB | NOTE_WRITE, 0, 0);
+	/* XXX-ADD SUPPORT FOR NOTE_UNLINK */
+	EV_SET(&kev, sub->sub_fd, EVFILT_VNODE, EV_ADD | EV_CLEAR, NOTE_ATTRIB | NOTE_WRITE, 0, 0);
 	rv = kevent(libstate_data.kqfd, &kev, 1, NULL, 0, NULL);
 	if (rv < 0) {
 		log_errno("kevent(2)");
@@ -235,7 +285,7 @@ int state_publish(const char *name, const char *state, size_t len)
 {
 	const char nul = '\0';
 	ssize_t written;
-	state_binding_t sbp, sb = NULL;
+	state_binding_t sb;
 	struct iovec iov[3];
 
 	iov[0].iov_base = &len;
@@ -245,15 +295,8 @@ int state_publish(const char *name, const char *state, size_t len)
 	iov[2].iov_base = (char *) &nul;
 	iov[2].iov_len = 1;
 
-	pthread_mutex_lock(&libstate_data.mtx);
-	SLIST_FOREACH(sbp, &libstate_data.bound_states, entry) {
-		if (strcmp(sbp->name, name) == 0) {
-			sb = sbp;
-			break;
-		}
-	}
-	pthread_mutex_unlock(&libstate_data.mtx);
-	if (sbp == NULL) {
+	sb = state_binding_lookup(name);
+	if (sb == NULL) {
 		log_error("tried to publish to an unbound name: %s", name);
 		return (-1);
 	}
@@ -346,17 +389,18 @@ ssize_t state_check(char **key, char **value) {
 	ssize_t nret;
 
 	if (key == NULL || value == NULL) return -1;
-	*value = NULL;
 
 	nret = kevent(libstate_data.kqfd, NULL, 0, &kev, 1, &ts);
 	if (nret < 0)
-		return -1;
-	if (nret == 0)
+		goto err_out;
+	if (nret == 0) {
+		*key = *value = NULL;
 		return 0;
+	}
 	if ((kev.fflags & NOTE_ATTRIB) || (kev.fflags & NOTE_WRITE)) {
 		log_debug("fd %u written", (unsigned int) kev.ident);
 	} else {
-		return -1;
+		goto err_out;
 	}
 
 	pthread_mutex_lock(&libstate_data.mtx);
@@ -369,17 +413,22 @@ ssize_t state_check(char **key, char **value) {
 	pthread_mutex_unlock(&libstate_data.mtx);
 	if (subp == NULL) {
 		log_error("recieved an event for fd %d which is not associated with a subscription", (int)kev.ident);
-		return (-1);
+		goto err_out;
 	}
 
 	if (subscription_update(sub) < 0) {
 		log_error("failed to update the state of %s", sub->sub_name);
-		return (-1);
+		goto err_out;
 	}
 
 	*key = sub->sub_name;
 	*value = sub->sub_buf + sizeof(size_t);
 	return sub->sub_buflen;
+
+err_out:
+	*key = NULL;
+	*value = NULL;
+	return -1;
 }
 
 int state_get_fd(void)

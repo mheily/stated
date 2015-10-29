@@ -26,14 +26,17 @@
 extern FILE *logfile;
 
 int log_open(const char *path);
+int log_close(void);
 
 /* Kludgy because this doesn't use syslog(3) yet */
 #define _log_all(level, format,...) do { \
-	(void)level; \
-	fprintf(logfile,                       \
+  (void)level; \
+  if (logfile) { \
+    fprintf(logfile,                       \
    "%s(%s:%d): "format"\n",                                             \
    __func__, __FILE__, __LINE__, ## __VA_ARGS__); \
    fflush(logfile); \
+   } \
 } while (0)
 
 #define log_error(format,...) _log_all(LOG_ERR, "**ERROR** "format, ## __VA_ARGS__)

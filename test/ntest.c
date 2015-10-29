@@ -17,16 +17,54 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "../include/state.h"
-#define run_test(_func) do { \
-	puts("running: "#_func); \
-	if (!test_##_func()) { puts("failed"); } else { puts("passed"); } \
+
+static int test_result;
+
+#define skip(_msg) do { \
+	printf("skipped: %s\n", _msg); \
+	return 2; \
 } while (0)
+		
+#define fail() do { \
+	fprintf(stderr, "%s(%s:%d): FAIL\n", __func__, __FILE__, __LINE__);  \
+	test_result = 0; \
+	return 0; \
+} while (0)
+
+#define run_test(_func) do { \
+	printf("%-24s", ""#_func); \
+	test_result = test_##_func(); \
+	switch (test_result) { \
+	case 0: puts("failed"); exit(1); break; \
+	case 1: puts("passed"); break; \
+	case 2: /* skipped */ break; \
+	default: puts("ERROR"); abort(); ;; \
+	} \
+} while (0)
+
 
 int test_state_init()
 {
-	return (state_init() == 0);
+	return (state_init(0, 0) == 0);
+}
+
+int test_state_openlog()
+{
+	return (state_openlog("ntest.log") == 0);
+}
+
+int test_state_closelog()
+{
+	return (state_closelog() == 0);
+}
+
+int test_state_atexit()
+{
+	state_atexit();	/* Not easy to test */
+	return 1;
 }
 
 int test_state_get_fd()
@@ -37,7 +75,16 @@ int test_state_get_fd()
 int test_state_bind()
 {
 	const char *name = "user.example.status";
-	return (state_bind(name, 0644) == 0);
+	return (state_bind(name) == 0);
+}
+
+int test_state_unbind()
+{
+	const char *name = "user.unbind.test";
+	if (state_bind(name) != 0) fail();
+	if (state_unbind(".invalid") == 0) fail();
+	if (state_unbind(name) != 0) fail();
+	return 1;
 }
 
 int test_state_publish()
@@ -79,15 +126,85 @@ int test_state_get()
 	return 1;
 }
 
+int test_multiple_state_changes()
+{
+	const char *name = "user.multiple_state_changes";
+	char *key, *value;
+	ssize_t len;
+
+	if (state_init(0, 0) < 0) fail();
+	if (state_bind(name) < 0) fail();
+	if (state_subscribe(name) < 0) fail();
+	if (state_publish(name, "a", 1) < 0) fail();
+	if ((len = state_check(&key, &value)) < 1) fail();
+	if (strcmp(key, name) != 0) fail();
+	if (strcmp(value, "a") != 0) fail();
+	/* Make sure that the internal state is cleared,
+	   and that it does not return multiple events */
+	if ((len = state_check(&key, &value)) != 0) {
+		printf("unexpected event: %s=%s\n", key, value);
+		fail();
+	}
+
+	/* Make sure another publish() causes a single event */
+	if (state_publish(name, "b", 1) < 0) fail();
+	if ((len = state_check(&key, &value)) <= 0) fail();
+	if (strcmp(key, name) != 0) fail();
+	if (strcmp(value, "b") != 0) fail();
+	if ((len = state_check(&key, &value)) != 0) fail();
+	if (key || value) fail();
+
+	return 1;
+}
+
+int test_system_namespace()
+{
+	const char *name = "system.name";
+	char *key, *value;
+	ssize_t len;
+
+	if (getuid() != 0) skip("this test must be run as root");
+	state_atexit();
+	if (state_init(0, 0) < 0) fail();
+	if (state_bind(name) < 0) fail();
+	if (state_subscribe(name) < 0) fail();
+	if (state_publish(name, "hi", 2) < 0) fail();
+	if ((len = state_check(&key, &value)) < 1) fail();
+	if (strcmp(key, name) != 0) fail();
+	if (strcmp(value, "hi") != 0) fail();
+	state_atexit();
+
+	return 1;
+}
+
 int main(int argc, char *argv[]) {
 	//TODO: clear any existing state files
-	run_test(state_init);
-	run_test(state_get_fd);
-	run_test(state_subscribe);
-	run_test(state_bind);
-	run_test(state_publish);
-	run_test(state_check);
-	run_test(state_get);
-	puts("ok");
+
+	(void) unlink("ntest.log");
+
+	atexit(state_atexit);
+
+ 	/* Unit tests, looking at each function in the API */
+	if (argc == 1 || strcmp(argv[1], "unit") == 0) {
+		run_test(state_init);
+		run_test(state_openlog);
+		run_test(state_get_fd);
+		run_test(state_subscribe);
+		run_test(state_bind);
+		run_test(state_unbind);
+		run_test(state_publish);
+		run_test(state_check);
+		run_test(state_get);
+		run_test(state_closelog);
+		run_test(state_atexit);
+	}
+
+ 	/* Acceptance tests, looking for specific behavior */
+	if (argc == 1 || strcmp(argv[1], "behavior") == 0) {
+		run_test(multiple_state_changes);
+		run_test(system_namespace);
+	}
+
+	puts("+OK All tests passed.");
 	exit(0);
 }

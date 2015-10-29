@@ -19,24 +19,39 @@
 
 #include <sys/stat.h>
 
-#define STATE_PREFIX "/var/state"
-
 /** 
   Initialize the state notification mechanism.
 
+  @param ABI_version The ABI version number for compatibility.
+  @param flags Reserved for future use.
   @return 0 if successful, or -1 if an error occurs.
 */
-int state_init(void);
+int state_init(int abi_version, int flags);
+
+/** 
+  Free all resources used by the state notification mechanism.
+  This is intended to be registered with atexit(3) to run when
+  the program exits.
+*/
+void state_atexit(void);
 
 /**
   Acquire the ability to publish notifications about a *name*
 
   @param name the name to acquire
-  @param mode who can subscribe (owner, group, and/or everybody)
 
   @return 0 if successful, or -1 if an error occurs.
  */
-int state_bind(const char *name, mode_t mode);
+int state_bind(const char *name);
+
+/**
+  Stop publishing information about <name>
+
+  @param name the name to unbind
+
+  @return 0 if successful, or -1 if an error occurs.
+ */
+int state_unbind(const char *name);
 
 /**
   Subscribe to notifications about a *name*.
@@ -145,5 +160,21 @@ int state_suspend(const char *name);
   @return 0 if successful, or -1 if an error occurs.
 */
 int state_resume(const char *name);
+
+
+/**
+  Open a logfile.
+
+  @param logfile the path to the logfile
+  @return 0 if successful, or -1 if an error occurs.
+*/
+int state_openlog(const char *logfile);
+
+/**
+  Close the logfile.
+
+  @return 0 if successful, or -1 if an error occurs.
+*/
+int state_closelog(void);
 
 #endif /* _STATE_H */
