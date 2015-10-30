@@ -333,9 +333,32 @@ int state_subscribe(const char *name)
 
 	return 0;
 
-	err_out: subscription_free(sub);
+err_out:
+	subscription_free(sub);
 	return -1;
 }
+
+int state_unsubscribe(const char *name)
+{
+	subscription_t sub;
+	struct kevent kev;
+	int rv;
+
+	pthread_mutex_lock(&libstate_data.mtx);
+	SLIST_FOREACH(sub, &libstate_data.subscriptions, entry)
+	{
+		if (strcmp(sub->sub_name, name) == 0) {
+			SLIST_REMOVE(&libstate_data.subscriptions, sub, subscription_s, entry);
+			pthread_mutex_unlock(&libstate_data.mtx);
+			subscription_free(sub);
+			return 0;
+		}
+	}
+	pthread_mutex_unlock(&libstate_data.mtx);
+
+	return -1;
+}
+
 
 int state_publish(const char *name, const char *state, size_t len)
 {
@@ -369,7 +392,6 @@ int state_publish(const char *name, const char *state, size_t len)
 
 	return 0;
 }
-
 
 int state_get(const char *key, char **value)
 {
@@ -459,16 +481,4 @@ err_out:
 int state_get_fd(void)
 {
 	return libstate_data.kqfd;
-}
-
-int state_suspend(const char *name)
-{
-	//STUB
-	return -1;
-}
-
-int state_resume(const char *name)
-{
-	//STUB
-	return -1;
 }

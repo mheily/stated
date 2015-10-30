@@ -67,6 +67,13 @@ int state_unbind(const char *name);
 int state_subscribe(const char *name);
 
 /**
+  Stop subscribing to notifications about <name>
+
+  @return 0 if successful, or -1 if an error occurs.
+*/
+int state_unsubscribe(const char *name);
+
+/**
   Publish a notification about *name* and update the *state*.
 
   @param name	The name to generate a notification for
@@ -151,20 +158,6 @@ void state_dispatch(char *name, dispatch_queue_t queue, void (^block)(void));
 #ifdef dispatch_queue_t
 void state_dispatch_f(char *name, dispatch_queue_t queue, void *context, void (*func)(void *));
 #endif
-
-/**
-  Disable notifications related to *name*.
-
-  @return 0 if successful, or -1 if an error occurs.
-*/
-int state_suspend(const char *name);
-
-/**
-  Resume notifications related to *name*
-
-  @return 0 if successful, or -1 if an error occurs.
-*/
-int state_resume(const char *name);
 
 
 /**

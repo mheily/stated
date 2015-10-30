@@ -48,23 +48,20 @@ static int test_result;
 
 int test_state_init()
 {
-	return (state_init(0, 0) == 0);
+	if (state_init(0, 0) < 0) fail();
+	state_atexit();
+
+	return 1;
 }
 
 int test_state_openlog()
 {
-	return (state_openlog("ntest.log") == 0);
-}
-
-int test_state_closelog()
-{
-	return (state_closelog() == 0);
-}
-
-int test_state_atexit()
-{
-	state_atexit();	/* Not easy to test */
+	if (state_init(0, 0) < 0) fail();
+	if (state_openlog("ntest.log") < 0) fail();
+	if (state_closelog() < 0) fail();
+	state_atexit();
 	return 1;
+
 }
 
 int test_state_get_fd()
@@ -75,15 +72,21 @@ int test_state_get_fd()
 int test_state_bind()
 {
 	const char *name = "user.example.status";
-	return (state_bind(name) == 0);
+	if (state_init(0, 0) < 0) fail();
+	if (state_bind(name) < 0) fail();
+	state_atexit();
+	return 1;
 }
 
 int test_state_unbind()
 {
 	const char *name = "user.unbind.test";
+
+	if (state_init(0, 0) < 0) fail();
 	if (state_bind(name) != 0) fail();
 	if (state_unbind(".invalid") == 0) fail();
 	if (state_unbind(name) != 0) fail();
+	state_atexit();
 	return 1;
 }
 
@@ -91,37 +94,78 @@ int test_state_publish()
 {
 	const char *name = "user.example.status";
 	const char *state = "I feel fine";
-	return (state_publish(name, state, strlen(state)) == 0);
+	if (state_init(0, 0) < 0) fail();
+	if (state_bind(name) != 0) fail();
+	if (state_publish(name, state, strlen(state)) < 0) fail();
+	state_atexit();
+	return 1;
 }
 
 int test_state_subscribe()
 {
 	const char *name = "user.example.status";
-	return (state_subscribe(name) == 0);
+
+	if (state_init(0,0) < 0) fail();
+	if (state_subscribe(name) < 0) fail();
+	state_atexit();
+
+	return 1;
+}
+
+int test_state_unsubscribe()
+{
+	const char *name = "user.example.test_unsubscribe";
+	char *key, *value;
+	ssize_t len;
+
+	if (state_init(0,0) < 0) fail();
+	if (state_unsubscribe("---invalid name---") != -1) fail();
+	if (state_subscribe(name) < 0) fail();
+	if (state_unsubscribe(name) < 0) fail();
+	if (state_bind(name) < 0) fail();
+	if (state_publish(name, "a", 1) < 0) fail();
+	if ((len = state_check(&key, &value)) > 0) fail();
+	state_atexit();
+
+	return 1;
 }
 
 int test_state_check()
 {
 	const char *name = "user.example.status";
+	const char *state = "I feel fine";
 	char *key, *value;
 	size_t len;
 
+	if (state_init(0, 0) < 0) fail();
+	if (state_bind(name) != 0) fail();
+	if (state_subscribe(name) < 0) fail();
+	if (state_publish(name, state, strlen(state)) < 0) fail();
 	len = state_check(&key, &value);
-	if (len <= 0) return 0;
-	if (strcmp(key, name) != 0) return 0;
-	if (strcmp(value, "I feel fine") != 0) return 0;
+	if (len <= 0) fail();
+	if (strcmp(key, name) != 0) fail();
+	if (strcmp(value, state) != 0) fail();
+	state_atexit();
+
 	return 1;
 }
 
 int test_state_get()
 {
 	const char *name = "user.example.status";
+	const char *state = "OK";
 	char *value;
+
+	if (state_init(0, 0) < 0) fail();
+	if (state_bind(name) != 0) fail();
+	if (state_subscribe(name) < 0) fail();
+	if (state_publish(name, state, strlen(state)) < 0) fail();
 	if (state_get(name, &value) < 0) fail();
-	if (strcmp(value, "I feel fine") != 0) fail();
+	if (strcmp(value, state) != 0) fail();
 
 	if (state_get("...an invalid name....", &value) >= 0) fail();
 	if (value) fail();
+	state_atexit();
 
 	return 1;
 }
@@ -153,6 +197,7 @@ int test_multiple_state_changes()
 	if (strcmp(value, "b") != 0) fail();
 	if ((len = state_check(&key, &value)) != 0) fail();
 	if (key || value) fail();
+	state_atexit();
 
 	return 1;
 }
@@ -164,7 +209,6 @@ int test_system_namespace()
 	ssize_t len;
 
 	if (getuid() != 0) skip("this test must be run as root");
-	state_atexit();
 	if (state_init(0, 0) < 0) fail();
 	if (state_bind(name) < 0) fail();
 	if (state_subscribe(name) < 0) fail();
@@ -186,17 +230,15 @@ int main(int argc, char *argv[]) {
 
  	/* Unit tests, looking at each function in the API */
 	if (argc == 1 || strcmp(argv[1], "unit") == 0) {
-		run_test(state_init);
 		run_test(state_openlog);
 		run_test(state_get_fd);
 		run_test(state_subscribe);
+		run_test(state_unsubscribe);
 		run_test(state_bind);
 		run_test(state_unbind);
 		run_test(state_publish);
 		run_test(state_check);
 		run_test(state_get);
-		run_test(state_closelog);
-		run_test(state_atexit);
 	}
 
  	/* Acceptance tests, looking for specific behavior */
