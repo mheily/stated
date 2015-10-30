@@ -24,6 +24,7 @@ LIBDIR ?= $(PREFIX)/lib
 BINDIR ?= $(PREFIX)/bin
 SBINDIR ?= $(PREFIX)/sbin
 LIBEXECDIR ?= $(PREFIX)/libexec
+MANDIR ?= $(PREFIX)/man
 
 STATEDIR != test -d /run && echo /run || echo /var/state
 USE_KQUEUE != test -e /usr/include/sys/event.h && echo 1 || echo 0
@@ -42,6 +43,11 @@ libstate.so: platform.h
 stated-debug:
 	CFLAGS="$(DEBUGFLAGS)" $(MAKE) stated
 
+state.3.gz:
+	cd doc && $(MAKE) clean all
+	cp doc/doxygen/man/man3/state.h.3 state.3
+	gzip state.3
+
 platform.h: platform.h.in
 	cat platform.h.in | sed "\
 		s,@@PACKAGE_VERSION@@,$(PACKAGE_VERSION),; \
@@ -54,18 +60,19 @@ platform.h: platform.h.in
 	" > platform.h
 
 clean:
-	rm -f *.o platform.h
+	rm -f *.o platform.h state.3.gz
 	rm -f libstate.so stated
 	
 check:
 	cd test && $(MAKE) check
 
-install:
+install: state.3.gz
 	test -e stated || $(MAKE) stated
 	install -m 755 -o 0 -g 0 stated $(SBINDIR)
 	install -m 644 -o 0 -g 0 libstate.so $(LIBDIR)/libstate.so.$(PACKAGE_VERSION)
 	ln -sf libstate.so.$(PACKAGE_VERSION) $(LIBDIR)/libstate.so.$(MAJOR_VERSION)
 	ln -sf libstate.so.$(PACKAGE_VERSION) $(LIBDIR)/libstate.so.$(MAJOR_VERSION).$(MINOR_VERSION)
+	install -m 644 -o 0 -g 0 state.3.gz $(MANDIR)/man3
 	test `uname` = "FreeBSD" && install -m 755 -o 0 -g 0 rc.FreeBSD /usr/local/etc/rc.d/stated || true
 
 .PHONY: all clean stated libstate.so

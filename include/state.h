@@ -19,11 +19,16 @@
 
 #include <sys/stat.h>
 
-/** 
+/** \file state.h
+ *
+ * A state notification mechanism
+ */
+
+/**
   Initialize the state notification mechanism.
 
-  @param ABI_version The ABI version number for compatibility.
-  @param flags Reserved for future use.
+  @param ABI_version The ABI version number for compatibility. This should be set to zero.
+  @param flags Reserved for future use. This should be set to zero.
   @return 0 if successful, or -1 if an error occurs.
 */
 int state_init(int abi_version, int flags);
