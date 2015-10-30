@@ -117,11 +117,11 @@ int test_state_get()
 {
 	const char *name = "user.example.status";
 	char *value;
-	if (state_get(name, &value) < 0) return 0;
-	if (strcmp(value, "I feel fine") != 0) return 0;
+	if (state_get(name, &value) < 0) fail();
+	if (strcmp(value, "I feel fine") != 0) fail();
 
-	if (state_get("...an invalid name....", &value) >= 0) return 0;
-	if (value) return 0;
+	if (state_get("...an invalid name....", &value) >= 0) fail();
+	if (value) fail();
 
 	return 1;
 }

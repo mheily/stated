@@ -3,7 +3,7 @@ ntest: ntest.c
 
 check:
 	## WORKAROUND: this should be done within ntest
-	find ~/.libstate/run -type f -exec rm {} \;
+	find ~/.libstate/run -type f -exec rm -f {} \;
 	##
 	cd .. ; CFLAGS="-g -O0 -DDEBUG" $(MAKE) all
 	$(MAKE) ntest
