@@ -478,7 +478,7 @@ err_out:
 	return -1;
 }
 
-int state_get_fd(void)
+int state_get_event_fd(void)
 {
 	return libstate_data.kqfd;
 }

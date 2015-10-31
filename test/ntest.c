@@ -66,7 +66,7 @@ int test_state_openlog()
 
 int test_state_get_fd()
 {
-	return (state_get_fd() != 0);
+	return (state_get_event_fd() != 0);
 }
 
 int test_state_bind()
@@ -231,7 +231,7 @@ int main(int argc, char *argv[]) {
  	/* Unit tests, looking at each function in the API */
 	if (argc == 1 || strcmp(argv[1], "unit") == 0) {
 		run_test(state_openlog);
-		run_test(state_get_fd);
+		run_test(state_get_event_fd);
 		run_test(state_subscribe);
 		run_test(state_unsubscribe);
 		run_test(state_bind);

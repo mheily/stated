@@ -17,12 +17,12 @@
 #ifndef _STATE_H_
 #define _STATE_H_
 
-#include <sys/stat.h>
-
 /** \file state.h
  *
  * A state notification mechanism
  */
+
+#include <sys/stat.h>
 
 /**
   Initialize the state notification mechanism.
@@ -75,6 +75,7 @@ int state_unsubscribe(const char *name);
 
 /**
   Publish a notification about *name* and update the *state*.
+  You must call state_bind() before using this function.
 
   @param name	The name to generate a notification for
   @param state	The new state to report
@@ -116,7 +117,7 @@ int state_get(const char *key, char **value);
   this example:
 
 	dispatch_source_t source = dispatch_source_create(
-		DISPATCH_SOURCE_TYPE_READ, notify_get_fd(),
+		DISPATCH_SOURCE_TYPE_READ, state_get_event_fd(),
 		0, dispatch_get_main_queue());
 	dispatch_source_set_event_handler(source, ^{
 	    char *name, *state;
@@ -131,7 +132,7 @@ int state_get(const char *key, char **value);
 	
   @return a file descriptor, or -1 if an error occurred.
 */
-int state_get_fd(void);
+int state_get_event_fd(void);
 
 /**
   Submit a block to be executed when one or more state change notifications are pending.
