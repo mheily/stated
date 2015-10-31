@@ -64,7 +64,7 @@ int test_state_openlog()
 
 }
 
-int test_state_get_fd()
+int test_state_get_event_fd()
 {
 	return (state_get_event_fd() != 0);
 }
