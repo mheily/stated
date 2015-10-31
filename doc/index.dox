@@ -1,0 +1,39 @@
+/** \mainpage stated - a state notification daemon
+
+stated (pronounced "state dee") is a mechanism for unrelated programs to
+communicate about changes to their internal state.
+ 
+\section Downloading Getting the source code
+
+The source code is available on the GitHub project page at https://github.com/mheily/stated
+
+You can checkout a copy of the source code by running:
+\code
+git clone https://github.com/mheily/stated.git
+\endcode
+
+\section Usage Usage
+
+See the state.h page for the API documentation.
+
+There are also example programs that demonstrate typical use cases; see the Examples page.
+
+\section License
+
+\code
+  Copyright (c) 2015 Mark Heily <mark@heily.com>
+ 
+  Permission to use, copy, modify, and distribute this software for any
+  purpose with or without fee is hereby granted, provided that the above
+  copyright notice and this permission notice appear in all copies.
+ 
+  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+\endcode
+
+*/

@@ -1,0 +1,7 @@
+/** \example publisher.dox 
+A program that publishes state information.
+*/
+
+/** \example subscriber.dox 
+A program that subscribes to state information.
+*/
