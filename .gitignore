@@ -7,5 +7,7 @@
 /test/ntest.log
 platform.h
 *.core
+*.o
+*.a
 state.3.gz
 stated-*.tar.gz

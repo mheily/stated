@@ -14,34 +14,26 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-PACKAGE_NAME ?= stated
-PACKAGE_VERSION ?= 0.1.1
-MAJOR_VERSION != echo $(PACKAGE_VERSION) | cut -f1 -d.
-MINOR_VERSION != echo $(PACKAGE_VERSION) | cut -f2 -d.
-PATCH_VERSION != echo $(PACKAGE_VERSION) | cut -f3 -d.
+include Makefile.inc
 
-PREFIX ?= /usr/local
-LIBDIR = $(PREFIX)/lib
-BINDIR = $(PREFIX)/bin
-SBINDIR = $(PREFIX)/sbin
-LIBEXECDIR = $(PREFIX)/libexec
-MANDIR = $(PREFIX)/man
-
-STATEDIR != test -d /run && echo /run || echo /var/state
-USE_KQUEUE != test -e /usr/include/sys/event.h && echo 1 || echo 0
-USE_INOTIFY != test -e /usr/include/sys/inotify.h && echo 1 || echo 0
+SUBDIRS=	statestat statectl
 
 # Files to include in the tarball
 DISTFILES = *.[ch] *.in rc.* README.md Makefile include doc
 
 DEBUGFLAGS=-g -O0 -DDEBUG
 
-all: stated libstate.so
+all: stated libstate.so libstate.a
+	for dir in $(SUBDIRS) ; do cd $$dir && $(MAKE) && cd .. ; done
 
 stated: platform.h
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ main.c log.c
 
-libstate.so: platform.h
+libstate.a: client.c log.c platform.h
+	$(CC) -static -c client.c log.c
+	ar rcs libstate.a client.o log.o
+	
+libstate.so: client.c log.c platform.h
 	$(CC) -fPIC -shared $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $@ client.c log.c
 	
 stated-debug:
@@ -67,6 +59,7 @@ clean:
 	cd doc ; $(MAKE) clean
 	rm -f *.o platform.h state.3.gz
 	rm -f libstate.so stated
+	for dir in $(SUBDIRS) ; do cd $$dir && $(MAKE) clean && cd .. ; done
 	
 check:
 	cd test && $(MAKE) check
@@ -89,5 +82,6 @@ install: state.3.gz
 	ln -sf libstate.so.$(PACKAGE_VERSION) $$DESTDIR$(LIBDIR)/libstate.so.$(MAJOR_VERSION).$(MINOR_VERSION)
 	install -m 644 state.3.gz $$DESTDIR$(MANDIR)/man3
 	test `uname` = "FreeBSD" && install -m 755 rc.FreeBSD $$DESTDIR/usr/local/etc/rc.d/stated || true
-
+	for dir in $(SUBDIRS) ; do cd $$dir && $(MAKE) ; done
+	
 .PHONY: all clean stated libstate.so
